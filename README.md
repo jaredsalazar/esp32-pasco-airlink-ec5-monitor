@@ -31,7 +31,7 @@ This is useful if you want to use a PASCO AirLink and EC-5 probe without needing
 
 Observed hardware labels during testing:
 
-- Probe: `EC-5`, `ECH2O`
+- Probe: `EC-5`
 - AirLink: `PS-3200`
 
 ## How We Figured It Out
@@ -69,8 +69,8 @@ Important: fully submerged does not mean PASCO `VWC` should read `100%`. These v
 
 ## Project Files
 
-- [platformio.ini](C:\Users\jared salazar\OneDrive\Documents\GitHub\esp32-pasco-airlink-ec5-monitor\platformio.ini): PlatformIO project configuration
-- [src/main.cpp](C:\Users\jared salazar\OneDrive\Documents\GitHub\esp32-pasco-airlink-ec5-monitor\src\main.cpp): BLE connection, packet decoding, and serial output
+- [platformio.ini]: PlatformIO project configuration
+- [src/main.cpp]: BLE connection, packet decoding, and serial output
 - CSV captures in the repo root: reference data exported from PASCO software during testing
 
 ## How To Build And Flash
