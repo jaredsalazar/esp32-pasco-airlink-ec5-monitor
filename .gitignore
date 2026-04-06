@@ -1,0 +1,7 @@
+.pio/
+.vscode/
+.idea/
+*.log
+*.tmp
+Thumbs.db
+Desktop.ini
