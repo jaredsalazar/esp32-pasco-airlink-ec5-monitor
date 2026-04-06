@@ -128,7 +128,6 @@ This makes it easier to treat the probe like a general wet/dry indicator while s
 - This project is currently tuned for the AirLink plus EC-5 path identified as `PS-2163`
 - `Water Potential` is not yet shown reliably from the observed AirLink packet stream
 - The startup message `No AirLink bridge response received.` may still appear even when normal sampling works
-- The `.pio` build folder is included locally right now and can be removed before publishing if you want a cleaner repo
 
 ## Source References
 
