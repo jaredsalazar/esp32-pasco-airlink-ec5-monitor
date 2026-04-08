@@ -1,6 +1,6 @@
 # ESP32 PASCO AirLink EC-5 Monitor
 
-This project lets an `ESP32` connect to a PASCO `AirLink (PS-3200)` over BLE, detect an attached `ECH2O EC-5` soil moisture probe, and print live moisture readings to the serial monitor.
+This project lets an `ESP32` connect to a PASCO `AirLink (PS-3200)` over BLE, detect an attached `ECH2O EC-5` soil moisture probe, and either print live moisture readings to the serial monitor or publish them to MQTT.
 
 It reports both PASCO-style values and a simpler normalized value:
 
@@ -71,25 +71,48 @@ Important: fully submerged does not mean PASCO `VWC` should read `100%`. These v
 
 - [platformio.ini]: PlatformIO project configuration
 - [src/main.cpp]: BLE connection, packet decoding, and serial output
+- [src/mqtt_main.cpp]: BLE monitor plus cellular MQTT publishing for an A7670 modem
 - CSV captures in the repo root: reference data exported from PASCO software during testing
 
 ## How To Build And Flash
 
 This project uses PlatformIO.
 
-Example commands:
+Serial monitor app:
 
 ```powershell
-pio run
-pio run -t upload
+pio run -e esp32dev
+pio run -e esp32dev -t upload
 pio device monitor
 ```
 
 If your ESP32 is on a specific port:
 
 ```powershell
-pio run -t upload --upload-port COM19
+pio run -e esp32dev -t upload --upload-port COM19
 ```
+
+Cellular MQTT app:
+
+```powershell
+pio run -e esp32dev-mqtt
+pio run -e esp32dev-mqtt -t upload
+```
+
+Before building the cellular MQTT app, check the `esp32dev-mqtt` `build_flags` in [platformio.ini]:
+
+```ini
+-DMODEM_RX_PIN=27
+-DMODEM_TX_PIN=26
+-DMODEM_PWRKEY_PIN=4
+-DMODEM_RESET_PIN=5
+-DMODEM_POWER_ON_PIN=23
+-DCELLULAR_APN=\"internet\"
+```
+
+The defaults above match a common LilyGO A7670 wiring. If your A7670 is on a different ESP32 board or uses different UART and power-control pins, change those flags before uploading.
+
+The cellular sketch uses TinyGSM with the `SIM7600` modem profile because SIMCom documents the A7670 AT command set as compatible with the SIM7500/SIM7600 series.
 
 ## How To Use It
 
@@ -107,6 +130,14 @@ Connected to AirLink.
 Attached sensor event ID from sensor: 0x101
 Detected PASCO Soil Moisture Sensor PS-2163 profile.
 Relative Wetness: 99.5%  VWC Potting Soil: 49.2%  Mineral Soil: 50.0%  Rockwool: 75.0%
+```
+
+For the cellular MQTT app, each successful sample is also published as a retained JSON payload to topic `esp32/pasco` on broker `tcp.ap-southeast-1.clawcloudrun.com:39024`.
+
+Example MQTT payload:
+
+```json
+{"sensorId":257,"relativeWetness":99.50,"pottingSoil":49.20,"mineralSoil":50.00,"rockwool":75.00,"waterPotential":0.00}
 ```
 
 ## Relative Wetness
@@ -140,4 +171,4 @@ Protocol work was based on:
 
 ## Summary
 
-This repo is a working ESP32 monitor for a PASCO AirLink with an attached EC-5 probe. It connects over BLE, decodes the AirLink sample payload correctly, filters false alternating frames, and prints stable live moisture readings suitable for logging, automation, or future integration work.
+This repo is a working ESP32 monitor for a PASCO AirLink with an attached EC-5 probe. It connects over BLE, decodes the AirLink sample payload correctly, filters false alternating frames, and can either print stable live moisture readings locally or publish them over cellular MQTT for remote logging and automation.
