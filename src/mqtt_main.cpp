@@ -41,6 +41,10 @@
 #define MODEM_TX_PIN 26
 #endif
 
+#ifndef MODEM_DTR_PIN
+#define MODEM_DTR_PIN 25
+#endif
+
 #ifndef MODEM_PWRKEY_PIN
 #define MODEM_PWRKEY_PIN 4
 #endif
@@ -50,7 +54,7 @@
 #endif
 
 #ifndef MODEM_POWER_ON_PIN
-#define MODEM_POWER_ON_PIN 23
+#define MODEM_POWER_ON_PIN 12
 #endif
 
 #ifndef CELLULAR_APN
@@ -63,6 +67,18 @@
 
 #ifndef CELLULAR_PASS
 #define CELLULAR_PASS ""
+#endif
+
+#ifndef MODEM_RESET_LEVEL
+#define MODEM_RESET_LEVEL HIGH
+#endif
+
+#ifndef MODEM_POWERON_PULSE_WIDTH_MS
+#define MODEM_POWERON_PULSE_WIDTH_MS 100
+#endif
+
+#ifndef MODEM_START_WAIT_MS
+#define MODEM_START_WAIT_MS 3000
 #endif
 
 namespace {
@@ -85,6 +101,7 @@ constexpr uint32_t kResponseTimeoutMs = 1500;
 constexpr uint32_t kCellularRetryIntervalMs = 5000;
 constexpr uint32_t kMqttRetryIntervalMs = 5000;
 constexpr uint32_t kNetworkTimeoutMs = 60000;
+constexpr uint32_t kStartupWaitLogIntervalMs = 3000;
 constexpr uint16_t kSensorIdPs2163 = 257;
 constexpr uint16_t kSensorIdWirelessSoilMoisture = 2065;
 constexpr bool kVerbosePackets = false;
@@ -116,6 +133,7 @@ volatile bool g_bridgeReady = false;
 uint16_t g_lastSensorId = 0;
 std::string g_lastSamplePayload;
 bool g_modemReady = false;
+bool g_serialAtReady = false;
 uint32_t g_lastCellularAttemptMs = 0;
 uint32_t g_lastMqttAttemptMs = 0;
 
@@ -192,18 +210,28 @@ bool cellularConfigured() {
   return strlen(CELLULAR_APN) > 0;
 }
 
-void powerOnModem() {
+void configureBoardPins() {
   pinMode(MODEM_POWER_ON_PIN, OUTPUT);
   digitalWrite(MODEM_POWER_ON_PIN, HIGH);
 
+  pinMode(MODEM_DTR_PIN, OUTPUT);
+  digitalWrite(MODEM_DTR_PIN, LOW);
+
   pinMode(MODEM_RESET_PIN, OUTPUT);
-  digitalWrite(MODEM_RESET_PIN, HIGH);
+  digitalWrite(MODEM_RESET_PIN, !MODEM_RESET_LEVEL);
+  delay(100);
+  digitalWrite(MODEM_RESET_PIN, MODEM_RESET_LEVEL);
+  delay(2600);
+  digitalWrite(MODEM_RESET_PIN, !MODEM_RESET_LEVEL);
 
   pinMode(MODEM_PWRKEY_PIN, OUTPUT);
+}
+
+void powerOnModem() {
   digitalWrite(MODEM_PWRKEY_PIN, LOW);
   delay(100);
   digitalWrite(MODEM_PWRKEY_PIN, HIGH);
-  delay(1100);
+  delay(MODEM_POWERON_PULSE_WIDTH_MS);
   digitalWrite(MODEM_PWRKEY_PIN, LOW);
 }
 
@@ -228,18 +256,25 @@ bool ensureCellularConnected() {
 
   if (!g_modemReady) {
     Serial.println("Initializing A7670 modem...");
+    configureBoardPins();
     powerOnModem();
-    delay(3000);
 
-    SerialAT.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
-    delay(300);
+    if (!g_serialAtReady) {
+      SerialAT.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
+      g_serialAtReady = true;
+    }
 
-    if (!g_modem.restart()) {
-      Serial.println("Failed to restart modem.");
+    Serial.println("Start modem...");
+    delay(MODEM_START_WAIT_MS);
+
+    if (!g_modem.init()) {
+      Serial.println("modem.init() failed");
       return false;
     }
 
     g_modemReady = true;
+    Serial.print("Modem name: ");
+    Serial.println(g_modem.getModemName());
     Serial.print("Modem info: ");
     Serial.println(g_modem.getModemInfo());
   }
@@ -634,8 +669,18 @@ void setup() {
 void loop() {
   static uint32_t lastPollMs = 0;
   static uint32_t lastWaitingLogMs = 0;
+  static uint32_t lastStartupWaitLogMs = 0;
 
   g_mqttClient.loop();
+
+  if (!ensureMqttConnected()) {
+    if (millis() - lastStartupWaitLogMs > kStartupWaitLogIntervalMs) {
+      lastStartupWaitLogMs = millis();
+      Serial.println("Waiting for cellular and MQTT before starting BLE sensor work...");
+    }
+    delay(50);
+    return;
+  }
 
   if (!ensureAirLinkConnected()) {
     delay(1000);
